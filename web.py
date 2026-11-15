@@ -33,7 +33,15 @@ from svg_canvas import CanvasSVG
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
-app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    # Derrière un reverse proxy HTTPS, mettre SESSION_COOKIE_SECURE=1 dans .env
+    SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "").strip().lower()
+    in ("1", "true", "oui", "yes"),
+    # L'API ne transporte que des réglages et des textes courts : 64 Ko suffisent
+    MAX_CONTENT_LENGTH=64 * 1024,
+)
 
 LARGEUR_MACHINE, HAUTEUR_MACHINE = 660, 600
 LARGEUR_CHAPITRE, HAUTEUR_CHAPITRE = 680, 640
@@ -58,18 +66,15 @@ class MachineWeb:
 
     # ---------- Actions ----------
     def appliquer(self, reflecteur, rotors, bagues, connexions):
-        if reflecteur not in REFLECTEURS or any(r not in ROTORS for r in rotors) or len(rotors) != 3:
-            raise ValueError("Réglage inconnu.")
-        if len(set(rotors)) < 3:
-            raise ValueError("Chaque rotor n'existe qu'en un seul exemplaire : "
-                             "choisissez trois rotors différents.")
-        bagues = [int(b) for b in bagues]
-        if len(bagues) != 3 or not all(1 <= b <= 26 for b in bagues):
-            raise ValueError("Les bagues vont de 01 à 26.")
+        """Reconstruit la machine avec les réglages demandés (ValueError si impossible)."""
+        # Enigma vérifie tout : trois rotors différents et connus, bagues entières
+        # de 1 à 26, réflecteur connu, câbles cohérents. Ses messages sont en français.
         machine = Enigma(rotors=rotors, positions=self.machine.positions(), bagues=bagues,
-                         reflecteur=reflecteur, connexions=connexions)   # ValueError si câbles faux
+                         reflecteur=reflecteur, connexions=connexions)
         self.machine = machine
-        self.reglages = {"reflecteur": reflecteur, "rotors": list(rotors), "bagues": bagues,
+        self.reglages = {"reflecteur": machine.reflecteur.nom,
+                         "rotors": [r.nom for r in machine.rotors],
+                         "bagues": [r.bague + 1 for r in machine.rotors],
                          "connexions": " ".join(machine.tableau.paires)}
         self.depart = machine.positions()
         self.trace = None
@@ -153,8 +158,46 @@ def visiteur():
     return donnees
 
 
+class CorpsInvalide(ValueError):
+    """Le corps de la requête n'est pas un objet JSON (ou un champ a le mauvais type)."""
+
+
+@app.errorhandler(CorpsInvalide)
+def _corps_invalide(erreur):
+    return jsonify({"erreur": str(erreur)}), 400
+
+
+@app.errorhandler(413)
+def _requete_trop_grosse(_):
+    return jsonify({"erreur": "Requête trop volumineuse."}), 413
+
+
 def corps():
-    return request.get_json(silent=True) or {}
+    """Corps JSON de la requête. Il doit être un objet : sinon 400, pas une erreur 500."""
+    donnees = request.get_json(silent=True)
+    if donnees is None:
+        return {}
+    if not isinstance(donnees, dict):
+        raise CorpsInvalide("Le corps de la requête doit être un objet JSON.")
+    return donnees
+
+
+def champ_texte(donnees, cle, defaut=""):
+    """Champ texte d'un corps JSON. Une valeur absente ou nulle vaut le défaut."""
+    valeur = donnees.get(cle, defaut)
+    if valeur is None:
+        return defaut
+    if not isinstance(valeur, str):
+        raise CorpsInvalide(f"Le champ « {cle} » doit être une chaîne de caractères.")
+    return valeur
+
+
+def champ_entier(donnees, cle, minimum, maximum):
+    """Champ entier d'un corps JSON, borné. Un booléen n'est pas un entier ici."""
+    valeur = donnees.get(cle)
+    if isinstance(valeur, bool) or not isinstance(valeur, int) or not minimum <= valeur <= maximum:
+        raise CorpsInvalide(f"Le champ « {cle} » doit être un entier de {minimum} à {maximum}.")
+    return valeur
 
 
 def coordonnee(valeur):
@@ -196,10 +239,13 @@ def machine_etat():
 @app.post("/api/machine/reglages")
 def machine_reglages():
     v, d = visiteur(), corps()
+    reflecteur = champ_texte(d, "reflecteur")
+    rotors = d.get("rotors", [])
+    bagues = d.get("bagues", [])
+    connexions = champ_texte(d, "connexions")
     with v["verrou"]:
         try:
-            v["machine"].appliquer(d.get("reflecteur"), d.get("rotors", []),
-                                   d.get("bagues", []), str(d.get("connexions", ""))[:100])
+            v["machine"].appliquer(reflecteur, rotors, bagues, connexions)
         except (ValueError, TypeError) as e:
             return erreur(str(e))
         return jsonify(v["machine"].etat())
@@ -208,11 +254,11 @@ def machine_reglages():
 @app.post("/api/machine/touche")
 def machine_touche():
     v, d = visiteur(), corps()
-    lettre = str(d.get("lettre", "")).upper()
-    if len(lettre) != 1 or lettre not in ALPHABET:
+    lettre = d.get("lettre")
+    if not isinstance(lettre, str) or len(lettre) != 1 or lettre.upper() not in ALPHABET:
         return erreur("Touche invalide.")
     with v["verrou"]:
-        v["machine"].appuyer(lettre)
+        v["machine"].appuyer(lettre.upper())
         return jsonify(v["machine"].etat(anime=bool(d.get("anime"))))
 
 
@@ -220,9 +266,12 @@ def machine_touche():
 def machine_clic():
     """Clic sur une lettre de la colonne « Clavier » du schéma."""
     v, d = visiteur(), corps()
+    tag = d.get("tag")
+    if not isinstance(tag, str) or not tag:
+        return erreur("Clic hors d'une touche.")
     with v["verrou"]:
         m = v["machine"]
-        if not m.dessiner().cliquer(str(d.get("tag")), coordonnee(d.get("y"))):
+        if not m.dessiner().cliquer(tag, coordonnee(d.get("y"))):
             return erreur("Clic hors d'une touche.")
         return jsonify(m.etat(anime=bool(d.get("anime"))))
 
@@ -230,17 +279,22 @@ def machine_clic():
 @app.post("/api/machine/texte")
 def machine_texte():
     v, d = visiteur(), corps()
+    contenu = champ_texte(d, "texte")
     with v["verrou"]:
-        v["machine"].taper(str(d.get("texte", "")))
+        v["machine"].taper(contenu)
         return jsonify(v["machine"].etat())
 
 
 @app.post("/api/machine/tourner")
 def machine_tourner():
     v, d = visiteur(), corps()
-    k, sens = d.get("rotor"), d.get("sens")
-    if k not in (0, 1, 2) or sens not in (-1, 1):
-        return erreur("Paramètres invalides.")
+    # Ici un booléen passerait pour 0/1 et un flottant (1.0) laisserait la position
+    # du rotor en flottant : la machine du visiteur devenait alors définitivement
+    # impossible à dessiner (500 à chaque requête suivante).
+    k = champ_entier(d, "rotor", 0, 2)
+    sens = champ_entier(d, "sens", -1, 1)
+    if sens == 0:
+        return erreur("Le sens doit être -1 ou 1.")
     with v["verrou"]:
         v["machine"].tourner(k, sens)
         return jsonify(v["machine"].etat())
@@ -299,7 +353,7 @@ def chapitre_bouton(n):
             return erreur("Chapitre inconnu.", 404)
         boutons = ch.boutons()
         k = d.get("index")
-        if not isinstance(k, int) or not 0 <= k < len(boutons):
+        if isinstance(k, bool) or not isinstance(k, int) or not 0 <= k < len(boutons):
             return erreur("Bouton inconnu.")
         boutons[k][1]()
         return jsonify(etat_chapitre(ch))
