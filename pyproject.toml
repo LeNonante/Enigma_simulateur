@@ -1,0 +1,17 @@
+# Configuration des outils de développement.
+# Ce projet est une application (python app.py / python web.py), pas un paquet
+# installable : il n'y a donc pas de section [build-system].
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+exclude = [".venv"]
+
+[tool.ruff.lint]
+# Règles sûres uniquement : erreurs de nom, imports inutiles, code mort
+select = ["F", "E9"]
