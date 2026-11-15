@@ -18,9 +18,9 @@ Chaque chapitre est une petite classe avec :
 import math
 from textwrap import dedent
 
-from enigma import ALPHABET, Enigma, Rotor, Reflecteur, TableauConnexions, ROTORS
+from enigma import ALPHABET, Enigma, Rotor, Reflecteur, TableauConnexions
 from schema import (Schema, ajouter_rotor_depuis, ajouter_machine, dessiner_legende,
-                    FOND, PIECE, BORD, ALLER, RETOUR, FENETRE, BOUGE, LAMPE, TEXTE,
+                    PIECE, BORD, ALLER, RETOUR, FENETRE, BOUGE, LAMPE, TEXTE,
                     POLICE_TITRE)
 
 GRAND = ("Helvetica", 13, "bold")
