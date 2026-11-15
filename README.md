@@ -5,7 +5,7 @@ Simulateur graphique de la machine à chiffrer **Enigma I** (armée allemande, 3
 Deux interfaces partagent exactement le même moteur et les mêmes dessins :
 
 - **Application de bureau** (Tkinter) : aucune dépendance, un seul `python app.py` suffit.
-- **Application web** (Flask) : déployable en ligne avec Docker.
+- **Application web** (Flask) : déployable en ligne avec Docker. Une version hébergée est disponible [ici](https://enigma.mussetau.fr/).
 
 ## Lancer l'application de bureau (Tkinter)
 
