@@ -34,14 +34,35 @@ Puis ouvrir <http://localhost:8000>.
 docker compose up -d --build
 ```
 
-Le site est alors disponible sur <http://localhost:8000>.
-
 Les réglages se font avec un fichier `.env`, à créer à partir de `.env.example` :
 
 | Variable | Rôle | Défaut |
 |---|---|---|
-| `PORT` | Port exposé sur la machine hôte | `8000` |
 | `SECRET_KEY` | Clé qui signe les cookies de session | aléatoire à chaque démarrage |
+
+Le port n'est pas publié sur la machine hôte : le `docker-compose.yml` se contente de l'exposer aux autres conteneurs. Le site est donc destiné à être servi par un reverse proxy placé sur le même réseau Docker.
+
+```yaml
+    expose:
+      - '8000'
+```
+
+Pour y accéder directement depuis la machine hôte, remplacez `expose` par une publication de port, par exemple `ports: ["8000:8000"]`.
+
+#### Réseau Docker externe (facultatif, propre à mon installation)
+
+Dans mon cas, le conteneur rejoint un réseau Docker existant, `services_net`, partagé avec mon reverse proxy :
+
+```yaml
+    networks:
+      - services_net
+
+networks:
+  services_net:
+    external: true
+```
+
+Ce bloc ne concerne que mon serveur. Si ce réseau n'existe pas chez vous, `docker compose up` échouera : supprimez ces lignes, ou remplacez `services_net` par le réseau de votre propre reverse proxy.
 
 Une route de santé, `GET /sante`, renvoie `ok`. Docker l'utilise pour son `HEALTHCHECK`.
 
