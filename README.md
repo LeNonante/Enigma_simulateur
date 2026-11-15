@@ -1,4 +1,4 @@
-# Enigma I — simulateur pédagogique en Python
+# Enigma I : simulateur pédagogique en Python
 
 Simulateur graphique de la machine à chiffrer **Enigma I** (armée allemande, 3 rotors), pensé pour **voir** ce qui se passe à chaque touche : rotation des rotors, trajet du courant à travers chaque pièce, lampe qui s'allume. Un second onglet explique le fonctionnement de la machine, chapitre par chapitre, avec les mêmes schémas.
 
