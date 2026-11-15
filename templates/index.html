@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Enigma I — simulateur pédagogique</title>
+  <meta name="description" content="Simulateur de la machine Enigma I : voyez le courant traverser rotors, réflecteur et tableau à chaque touche.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23ffd23f' stroke='%23222' stroke-width='3'/%3E%3Ctext x='16' y='22' font-size='17' font-family='Arial' font-weight='bold' text-anchor='middle'%3EE%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="entete">
+  <h1>Enigma I <span>simulateur pédagogique</span></h1>
+  <nav class="onglets" role="tablist">
+    <button class="onglet actif" data-onglet="machine" role="tab">Machine</button>
+    <button class="onglet" data-onglet="explications" role="tab">Comment ça marche ?</button>
+  </nav>
+</header>
+
+<!-- ================= Onglet Machine ================= -->
+<main id="machine" class="page active">
+
+  <section class="reglages">
+    <h2>Réglages de la machine <small>(la « clé du jour »)</small></h2>
+    <div class="reglages-ligne">
+
+      <fieldset>
+        <legend>Réflecteur</legend>
+        <select id="reflecteur" class="reglage">
+          {% for r in reflecteurs %}<option>{{ r }}</option>{% endfor %}
+        </select>
+      </fieldset>
+
+      {% for nom in ["Rotor gauche", "Rotor milieu", "Rotor droit"] %}
+      <fieldset class="rotor">
+        <legend>{{ nom }}</legend>
+        <label>Modèle
+          <select class="reglage modele" data-rotor="{{ loop.index0 }}">
+            {% for r in rotors %}<option>{{ r }}</option>{% endfor %}
+          </select>
+        </label>
+        <label>Bague
+          <select class="reglage bague" data-rotor="{{ loop.index0 }}">
+            {% for n in range(1, 27) %}<option value="{{ n }}">{{ "%02d"|format(n) }}</option>{% endfor %}
+          </select>
+        </label>
+        <div class="fenetre-bloc">
+          <span class="etiquette">Fenêtre</span>
+          <div class="fenetre-ctrl">
+            <button class="tourner" data-rotor="{{ loop.index0 }}" data-sens="-1" title="Reculer">◀</button>
+            <span class="fenetre" data-fenetre="{{ loop.index0 }}">A</span>
+            <button class="tourner" data-rotor="{{ loop.index0 }}" data-sens="1" title="Avancer">▶</button>
+          </div>
+        </div>
+      </fieldset>
+      {% endfor %}
+
+      <fieldset class="tableau">
+        <legend>Tableau de connexions</legend>
+        <input id="connexions" type="text" placeholder="ex : AB CD EF" maxlength="60" autocomplete="off">
+        <small>Entrée pour valider</small>
+      </fieldset>
+
+      <div class="actions">
+        <button id="appliquer">Appliquer</button>
+        <button id="nouveau">↺ Nouveau message</button>
+        <label class="case"><input type="checkbox" id="anime" checked> Animer le courant</label>
+      </div>
+    </div>
+  </section>
+
+  <div class="machine-grille">
+    <div id="schema-machine" class="schema" aria-label="Schéma du trajet du courant"></div>
+
+    <aside class="panneau">
+      <h3>Tableau lumineux</h3>
+      <div class="lampes">
+        {% for rangee in clavier %}
+        <div class="rangee" style="margin-left: {{ loop.index0 * 20 }}px">
+          {% for l in rangee %}<span class="lampe" data-lettre="{{ l }}">{{ l }}</span>{% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+
+      <h3>Clavier <small>— cliquez, ou tapez sur votre vrai clavier</small></h3>
+      <div class="clavier">
+        {% for rangee in clavier %}
+        <div class="rangee" style="margin-left: {{ loop.index0 * 18 }}px">
+          {% for l in rangee %}<button class="touche" data-lettre="{{ l }}">{{ l }}</button>{% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+
+      <h3>Lettres tapées</h3>
+      <div id="texte-entree" class="zone-texte"></div>
+      <h3>Lettres allumées (résultat)</h3>
+      <div id="texte-sortie" class="zone-texte"></div>
+
+      <form id="form-texte" class="form-texte">
+        <input id="texte" type="text" placeholder="Un texte à taper d'un coup…" autocomplete="off" maxlength="2000">
+        <button type="submit">Taper ce texte</button>
+      </form>
+
+      <h3>Que s'est-il passé pour la dernière lettre ?</h3>
+      <pre id="detail" class="detail"></pre>
+    </aside>
+  </div>
+</main>
+
+<!-- ================= Onglet Explications ================= -->
+<main id="explications" class="page">
+  <div class="explications-grille">
+    <ol class="sommaire">
+      {% for titre in chapitres %}
+      <li><button class="chapitre-lien" data-chapitre="{{ loop.index0 }}">{{ titre }}</button></li>
+      {% endfor %}
+    </ol>
+
+    <article class="chapitre">
+      <h2 id="chapitre-titre"></h2>
+      <div id="chapitre-texte" class="chapitre-texte"></div>
+      <div id="chapitre-boutons" class="chapitre-boutons"></div>
+      <div class="navigation">
+        <button id="precedent">◀ Précédent</button>
+        <button id="suivant">Suivant ▶</button>
+      </div>
+    </article>
+
+    <div id="schema-chapitre" class="schema"></div>
+  </div>
+</main>
+
+<div id="toast" class="toast" role="alert" hidden></div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

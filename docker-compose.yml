@@ -1,0 +1,12 @@
+services:
+  enigma:
+    build: .
+    image: enigma-web
+    container_name: enigma
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      # Clé qui signe les cookies de session (facultative : si elle est vide,
+      # une clé aléatoire est générée à chaque démarrage).
+      SECRET_KEY: ${SECRET_KEY:-}
+    restart: unless-stopped

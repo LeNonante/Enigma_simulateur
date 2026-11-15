@@ -46,7 +46,7 @@ class Schema:
         self.ordre = []         # identifiants de gauche à droite
         self.curseur = x        # abscisse de la prochaine pièce
         self.animations = []    # identifiants des after() en cours
-        self.tag = f"schema{id(self)}"   # étiquette unique pour ce schéma
+        self.tag = f"schema{int(x)}_{int(y)}"   # étiquette unique (une position = un schéma)
 
     # ================== Géométrie ==================
     def y(self, contact):
@@ -315,3 +315,38 @@ def dessiner_legende(canvas, x, y):
     c.create_text(x + 13, y, text="encoche", anchor="w", font=POLICE_TITRE)
     x += 75
     c.create_text(x, y, text="↻ = vient de tourner", anchor="w", font=POLICE_TITRE, fill=BOUGE)
+
+
+# ======================================================================
+# Texte « Que s'est-il passé ? » (partagé par Tkinter et la version web)
+# ======================================================================
+NOMS_PIECES = {"tableau": "Tableau de connexions", "reflecteur": "Réflecteur",
+               "gauche": "Rotor gauche", "milieu": "Rotor milieu", "droit": "Rotor droit"}
+
+
+def decrire_appui(machine, detail, avant, sortie):
+    """
+    Explication d'un appui de touche, sous forme de morceaux (texte, style)
+    avec style = "gras", "aller", "retour" ou "".
+    """
+    noms = dict(NOMS_PIECES)
+    for ident, rotor in zip(("gauche", "milieu", "droit"), machine.rotors):
+        noms[ident] += f" ({rotor.nom})"
+    noms["reflecteur"] += f" ({machine.reflecteur.nom})"
+
+    m = [(f"Touche appuyée : {detail['touche']}\n\n", "gras"),
+         (f"1) Les rotors tournent AVANT le passage du courant : "
+          f"{avant} → {machine.positions()}\n", "gras")]
+    for explication in detail["explications"]:
+        m.append((f"   • {explication}\n", ""))
+
+    m.append(("\n2) Le courant traverse la machine :\n", "gras"))
+    style = "aller"
+    for piece, entree, sortie_piece in detail["trajet"]:
+        m.append((f"   ligne {ALPHABET[entree]} → ligne {ALPHABET[sortie_piece]}   "
+                  f"{noms[piece]}\n", style))
+        if piece == "reflecteur":
+            style = "retour"
+    m.append((f"\n3) La lampe {sortie} s'allume.\n", "gras"))
+    m.append(("\n(« ligne » = lettre du clavier en face, sur le schéma)", ""))
+    return m

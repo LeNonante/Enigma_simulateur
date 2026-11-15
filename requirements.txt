@@ -1,0 +1,3 @@
+# Uniquement pour la version web (l'interface Tkinter n'a besoin de rien)
+flask>=3.0,<4
+gunicorn>=22,<24

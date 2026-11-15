@@ -7,21 +7,22 @@ Lancer :   python app.py
 Fichiers :
   enigma.py        la logique de la machine (aucune interface)
   schema.py        le dessin des pièces et du trajet du courant
+  chapitres.py     le contenu des chapitres d'explication (sans Tkinter)
   explications.py  l'onglet « Comment ça marche ? »
   app.py           la fenêtre principale et l'onglet « Machine »
+
+Une version web de la même application est dans web.py (Flask).
 """
 
 import tkinter as tk
 from tkinter import ttk, messagebox
 
 from enigma import Enigma, ROTORS, REFLECTEURS, ALPHABET, nettoyer
-from schema import (Schema, ajouter_machine, dessiner_legende,
+from schema import (Schema, ajouter_machine, dessiner_legende, decrire_appui,
                     ALLER, RETOUR, LAMPE, FOND, FENETRE)
 from explications import PageExplications
 
 CLAVIER_ALLEMAND = ["QWERTZUIO", "ASDFGHJK", "PYXCVBNML"]   # disposition d'origine
-NOMS_PIECES = {"tableau": "Tableau de connexions", "reflecteur": "Réflecteur",
-               "gauche": "Rotor gauche", "milieu": "Rotor milieu", "droit": "Rotor droit"}
 
 
 class PageMachine(ttk.Frame):
@@ -288,27 +289,7 @@ class PageMachine(ttk.Frame):
         self.detail.config(state="disabled")
 
     def afficher_detail(self, detail, avant, sortie):
-        noms = dict(NOMS_PIECES)
-        for ident, rotor in zip(("gauche", "milieu", "droit"), self.machine.rotors):
-            noms[ident] += f" ({rotor.nom})"
-        noms["reflecteur"] += f" ({self.machine.reflecteur.nom})"
-
-        m = [(f"Touche appuyée : {detail['touche']}\n\n", "gras"),
-             (f"1) Les rotors tournent AVANT le passage du courant : "
-              f"{avant} → {self.machine.positions()}\n", "gras")]
-        for explication in detail["explications"]:
-            m.append((f"   • {explication}\n", ""))
-
-        m.append(("\n2) Le courant traverse la machine :\n", "gras"))
-        tag = "aller"
-        for piece, entree, sortie_piece in detail["trajet"]:
-            m.append((f"   ligne {ALPHABET[entree]} → ligne {ALPHABET[sortie_piece]}   "
-                      f"{noms[piece]}\n", tag))
-            if piece == "reflecteur":
-                tag = "retour"
-        m.append((f"\n3) La lampe {sortie} s'allume.\n", "gras"))
-        m.append(("\n(« ligne » = lettre du clavier en face, sur le schéma)", ""))
-        self.ecrire_detail(m)
+        self.ecrire_detail(decrire_appui(self.machine, detail, avant, sortie))
 
 
 class FenetreEnigma(tk.Tk):
