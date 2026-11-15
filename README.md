@@ -39,6 +39,7 @@ Les réglages se font avec un fichier `.env`, à créer à partir de `.env.examp
 | Variable | Rôle | Défaut |
 |---|---|---|
 | `SECRET_KEY` | Clé qui signe les cookies de session | aléatoire à chaque démarrage |
+| `SESSION_COOKIE_SECURE` | `1` pour n'envoyer le cookie de session qu'en HTTPS (à mettre derrière un reverse proxy) | désactivé |
 
 Le port n'est pas publié sur la machine hôte : le `docker-compose.yml` se contente de l'exposer aux autres conteneurs. Le site est donc destiné à être servi par un reverse proxy placé sur le même réseau Docker.
 
@@ -70,12 +71,40 @@ Pour une mise en ligne, placez le conteneur derrière un reverse proxy (Nginx, C
 
 > ⚠️ **Gardez un seul worker Gunicorn.** La machine et les chapitres de chaque visiteur sont gardés **en mémoire** dans le processus (un cookie permet de retrouver chaque visiteur). Plusieurs workers ne partageraient pas ces données. Pour encaisser plus de visiteurs simultanés, augmentez plutôt `--threads` dans le `Dockerfile`. Un redémarrage remet toutes les machines à zéro.
 
-## Vérifier le moteur
+## Vérifier le moteur et lancer les tests
+
+Le moteur s'auto-vérifie sur des valeurs de référence connues :
 
 ```bash
 python enigma.py
 # → Tous les tests passent.
 ```
+
+La suite complète (moteur, ligne de commande et API web) utilise pytest :
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+# → 151 passed
+```
+
+Les tests du moteur tournent sans aucune dépendance ; ceux de l'API web ont besoin de Flask et sont ignorés s'il n'est pas installé.
+
+## Utiliser le moteur en ligne de commande
+
+`enigma.py` chiffre et déchiffre sans interface — la machine est réciproque :
+
+```bash
+python enigma.py "BONJOUR"                       # clé par défaut : I-II-III, AAA, réflecteur B
+python enigma.py --positions HDX --bagues 4 12 20 --reflecteur C \
+                 --plugs "AM FI NV PS TU WZ" "BONJOUR"
+python enigma.py --detail "ATTENTION"            # avancement des rotors et trajet du courant
+python enigma.py --json "ATTENTION"              # réglages, lettres et trajets, en JSON
+python enigma.py --grouper 5 "ATTENTION"         # présentation par groupes de 5 lettres
+echo "attaque a l'aube" | python enigma.py       # lit l'entrée standard
+```
+
+Les bagues s'écrivent `1` à `26` ou `A` à `Z` (A = 1). Le texte est nettoyé comme dans les interfaces : accents, espaces et ponctuation ignorés. Un réglage impossible (rotor en double, bague hors bornes, réflecteur inconnu) arrête la commande avec un code 2 et un message explicite.
 
 ## Fonctionnalités
 
@@ -116,7 +145,7 @@ Ce dernier essai montre qu'Enigma est réciproque : chiffrer et déchiffrer sont
 
 ```
 enigma/
-├── enigma.py           Moteur de la machine (aucune interface) + tests
+├── enigma.py           Moteur de la machine (aucune interface) + ligne de commande
 ├── schema.py           Dessin des pièces et du trajet du courant
 ├── chapitres.py        Contenu des 10 chapitres d'explication (sans Tkinter)
 │
@@ -132,6 +161,12 @@ enigma/
 │   └── app.js          Interactions (JavaScript sans framework)
 │
 ├── requirements.txt    Dépendances de la version web (Flask, Gunicorn)
+├── requirements-dev.txt Dépendances de développement (pytest)
+├── pyproject.toml      Configuration de pytest et de ruff
+├── conftest.py         Rend le dépôt importable quel que soit l'outil de test
+├── tests/
+│   ├── test_enigma.py  Moteur et ligne de commande
+│   └── test_web.py     API web, avec le client de test Flask
 ├── Dockerfile
 ├── docker-compose.yml
 └── .env.example
@@ -164,12 +199,15 @@ Deux astuces dans `CanvasSVG` :
 | POST | `/api/chapitres/<n>/bouton` | Bouton d'un chapitre `{index}` |
 | POST | `/api/chapitres/<n>/clic` | Clic dans le schéma d'un chapitre `{tag, y}` |
 
+Toute route POST répond `400` avec `{"erreur": "…"}` quand le corps n'est pas un objet JSON ou qu'un champ est invalide : la machine du visiteur reste alors intacte.
+
 ### Points clés du moteur
 
 - **Lettres et nombres** : les lettres sont manipulées comme des nombres de 0 (A) à 25 (Z), et tous les décalages se font avec `% 26`.
 - **Rotor** : à l'aller, `(cablage[(c + d) % 26] - d) % 26`, avec `d = position - bague`. Au retour, on applique la même formule avec le câblage inverse, qui est précalculé.
 - **Avancement des rotors** : il a lieu **avant** le passage du courant. On applique d'abord le double pas (le rotor du milieu est sur son encoche, donc il avance et entraîne le rotor gauche), sinon l'entraînement par le rotor droit, puis le rotor droit avance.
 - **Trajet** : `Enigma.appuyer()` renvoie la lettre allumée ainsi que la liste `(pièce, contact d'entrée, contact de sortie)`. Les interfaces utilisent cette liste pour tracer le schéma.
+- **Réglages vérifiés** : `Enigma` refuse une machine impossible (moins de trois rotors, rotor en double ou inconnu, bague hors de 1 à 26, position qui n'a pas trois lettres, réflecteur inconnu, câble mal formé) et lève un `ValueError` explicite. Les interfaces se contentent d'afficher ce message.
 
 ## Câblages utilisés
 
