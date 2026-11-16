@@ -1,0 +1,4 @@
+# Dépendances pour développer et lancer les tests
+# (l'application de bureau, elle, n'a besoin de rien : Tkinter est fourni avec Python)
+-r requirements.txt
+pytest>=8
